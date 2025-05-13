@@ -40,8 +40,8 @@ GOOGLE_API_KEY=your_google_ai_api_key_here
 
 1.  Clone the repository:
     ```bash
-    git clone https://github.com/lalomorales22/Tie-Dyed-Tales.git
-    cd Tie-Dyed-Tales
+    git clone https://github.com/lalomorales22/tdt-studio.git
+    cd tdt-studio
     ```
 2.  Install dependencies:
     ```bash
