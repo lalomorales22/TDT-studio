@@ -21,24 +21,23 @@ export default function StoryPage() {
   useEffect(() => {
     const fullStoryText = sessionStorage.getItem("tieDyedTales_currentStory");
     if (!fullStoryText) {
-      setError("No story data found. Please start a new story.");
+      setError("No story data found in this session. Please start a new story from the homepage.");
       setIsLoading(false);
       // Optionally redirect: router.replace("/");
       return;
     }
 
     try {
-      const { storyMap: parsedMap, startNodeId } = parseStory(fullStoryText);
+      const { storyMap: parsedMap, startNodeId } = parseStory(fullStoryText); // startNodeId from parseStory isn't strictly needed here but parsed with map
       if (!parsedMap || parsedMap.size === 0) {
-        setError("Failed to parse the story. The story data might be corrupted.");
+        setError("Failed to parse the story content. The story data might be corrupted or empty. Please try generating it again.");
       } else {
         setStoryMap(parsedMap);
-        // If current nodeId is not in map (e.g. bad URL) but we have a startNodeId, consider redirecting.
-        // For now, StoryNodeDisplay will handle if node is not found.
+        // If current nodeId is not in map (e.g. bad URL) StoryNodeDisplay will handle it.
       }
     } catch (e) {
       console.error("Error parsing story:", e);
-      setError("An error occurred while trying to load the story.");
+      setError("An unexpected error occurred while trying to load the story structure. Please try generating it again.");
     } finally {
       setIsLoading(false);
     }
@@ -61,7 +60,7 @@ export default function StoryPage() {
   if (error) {
     return (
       <div className="text-center py-10">
-        <h2 className="text-2xl font-semibold text-destructive mb-4">Error</h2>
+        <h2 className="text-2xl font-semibold text-destructive mb-4">Error Loading Story</h2>
         <p className="mb-6">{error}</p>
         <Button onClick={handleRestart} variant="outline">
            <RotateCcw className="mr-2 h-4 w-4" /> Start New Story
@@ -70,5 +69,7 @@ export default function StoryPage() {
     );
   }
   
+  // StoryNodeDisplay will show its own "Node Not Found" if currentNodeData is null/undefined
+  // after successful parsing but the specific nodeId is invalid.
   return <StoryNodeDisplay node={currentNodeData} onRestart={handleRestart} />;
 }

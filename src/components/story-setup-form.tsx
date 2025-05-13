@@ -22,7 +22,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { generateStoryAction } from "@/app/actions";
 import Loader from "@/components/loader";
-import type { StoryInput } from "@/ai/flows/story-and-structure-generation"; // Using existing type
+import type { StoryInput } from "@/ai/flows/story-and-structure-generation";
+import { parseStory } from "@/lib/story-parser"; // Added import
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+
 
 // Define Zod schema based on StoryInput, making optional fields truly optional for the form
 const formSchema = z.object({
@@ -79,9 +82,6 @@ export function StorySetupForm() {
 
   const onSubmit: SubmitHandler<FormValues> = async (data) => {
     setIsLoading(true);
-    // Explicitly cast to StoryInput as optional fields in form might be undefined
-    // but AI schema might expect them to be present if empty string or handle undefined.
-    // The AI schema for StoryInput makes optional fields z.string().optional(), so undefined is fine.
     const result = await generateStoryAction(data as StoryInput);
     setIsLoading(false);
 
@@ -93,23 +93,35 @@ export function StorySetupForm() {
       });
     } else if (result.story) {
       try {
-        // Store the full story in sessionStorage for the story display page
         sessionStorage.setItem("tieDyedTales_currentStory", result.story);
-        // A minimal parse to find the first node ID, or assume a convention like 'start_page'
-        const firstNodeMatch = result.story.match(/Node ID:\s*([a-zA-Z0-9_]+)/);
-        const startNodeId = firstNodeMatch ? firstNodeMatch[1] : "start_page"; // Fallback
         
+        const { storyMap: parsedMap, startNodeId: actualStartNodeId } = parseStory(result.story);
+
+        if (!actualStartNodeId || parsedMap.size === 0) {
+          console.error("Failed to parse story or find a start node. StoryMap size:", parsedMap.size, "StartNodeId:", actualStartNodeId);
+          toast({
+            variant: "destructive",
+            title: "Parsing Error",
+            description: "Story generated, but could not be parsed correctly. The content might be malformed, empty, or no start node found. Please try again.",
+          });
+          return; 
+        }
+        
+        // If actualStartNodeId is non-null and parsedMap is not empty, 
+        // actualStartNodeId IS a key in parsedMap by definition of parseStory.
         toast({
           title: "Story Generated!",
           description: "Your adventure awaits!",
         });
-        router.push(`/story/${startNodeId}`);
+        router.push(`/story/${actualStartNodeId}`);
+
       } catch (e) {
         console.error("Error processing story result:", e);
+        const errorMessage = e instanceof Error ? e.message : "An unknown error occurred.";
         toast({
           variant: "destructive",
-          title: "Error",
-          description: "Story generated but could not be displayed. Please try again.",
+          title: "Error Processing Story",
+          description: `An error occurred while trying to display the story: ${errorMessage}. Please try again.`,
         });
       }
     }
@@ -288,6 +300,3 @@ export function StorySetupForm() {
     </Card>
   );
 }
-
-// Need to add Card components to this file for it to work as self-contained
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
