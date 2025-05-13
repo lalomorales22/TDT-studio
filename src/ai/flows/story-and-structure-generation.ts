@@ -67,7 +67,7 @@ Target Audience: {{{targetAudience}}}
 Protagonist:
 Name: {{{protagonistName}}}
 Description: {{{protagonistDescription}}}
-Key Motivation: {{{{{{keyMotivation}}}}}
+Key Motivation: {{{keyMotivation}}}
 
 Setting:
 Primary Location(s): {{{primaryLocation}}}
