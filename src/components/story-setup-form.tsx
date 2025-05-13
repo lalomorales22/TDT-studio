@@ -20,9 +20,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { generateStoryStructureAction } from "@/app/actions"; // Updated action import
+import { generateStoryStructureAction } from "@/app/actions";
 import Loader from "@/components/loader";
-import type { StoryStructureInput } from "@/ai/flows/generate-story-structure"; // Updated type import
+import type { StoryStructureInput } from "@/ai/flows/generate-story-structure";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 // Define Zod schema based on StoryStructureInput
@@ -80,7 +80,6 @@ export function StorySetupForm() {
 
   const onSubmit: SubmitHandler<FormValues> = async (data) => {
     setIsLoading(true);
-    // Call the new action to generate the structure
     const result = await generateStoryStructureAction(data as StoryStructureInput);
     setIsLoading(false);
 
@@ -92,14 +91,15 @@ export function StorySetupForm() {
       });
     } else if (result.structure) {
       try {
-        // Store the generated structure in sessionStorage for the review page
+        // Store the generated structure for the review page
         sessionStorage.setItem("tieDyedTales_storyStructure", JSON.stringify(result.structure));
+        // Store the original form input for the full content generation step
+        sessionStorage.setItem("tieDyedTales_originalStoryInput", JSON.stringify(data));
 
         toast({
           title: "Story Structure Generated!",
           description: "Review the outline for your adventure.",
         });
-        // Navigate to the new review page
         router.push(`/review-structure`);
 
       } catch (e) {
@@ -112,7 +112,6 @@ export function StorySetupForm() {
         });
       }
     } else {
-       // Handle case where structure is unexpectedly missing without an error
        toast({
         variant: "destructive",
         title: "Structure Generation Failed",
