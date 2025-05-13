@@ -7,6 +7,7 @@ import { parseStory } from '@/lib/story-parser';
 import type { ParsedStory, StoryNodeData } from '@/types/story';
 import Loader from '@/components/loader';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { RotateCcw, AlertTriangle } from 'lucide-react';
 
 export default function StoryPage() {
