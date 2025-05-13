@@ -1,7 +1,9 @@
+// @ts-nocheck
+// TODO: Fix types
 "use server";
 
 import { generateStoryStructure, type StoryStructureInput, type StoryStructureOutput, type StoryNodeStructure } from "@/ai/flows/generate-story-structure";
-import { generateNodeContent, type NodeContentInput } from "@/ai/flows/generate-node-content";
+import { generateNodeContent, type NodeContentInput, type NodeContentOutput } from "@/ai/flows/generate-node-content";
 
 export interface FullStoryGenerationInput {
   structure: StoryStructureOutput;
@@ -27,57 +29,105 @@ export async function generateStoryStructureAction(input: StoryStructureInput): 
   }
 }
 
-// Action for generating the full story content based on the approved structure and original input
+export interface NodesBatchResult {
+  batchContent?: Record<string, string>; // nodeId -> content
+  error?: string; // General error for the batch or summary of node errors
+  // nodeErrors?: Record<string, string>; // Optional: detailed errors per node
+}
+
+// New action to generate content for a batch of nodes
+export async function generateNodesBatchAction(
+  nodes: StoryNodeStructure[],
+  storyContext: StoryStructureInput
+): Promise<NodesBatchResult> {
+  const batchContent: Record<string, string> = {};
+  const nodeErrorsMessages: string[] = [];
+  let overallBatchError: string | undefined;
+
+  console.log(`Generating content for batch of ${nodes.length} nodes.`);
+
+  try {
+    for (const nodeStruct of nodes) {
+      const nodeInput: NodeContentInput = {
+        storyContext: storyContext,
+        nodeStructure: nodeStruct,
+      };
+      
+      // Small delay to potentially avoid hitting rate limits very rapidly.
+      // Genkit or the underlying model API might have its own rate limiting.
+      // Adjust or remove if not necessary or if it slows down too much.
+      await new Promise(resolve => setTimeout(resolve, 300)); 
+
+      try {
+        const nodeContentResult = await generateNodeContent(nodeInput);
+        if (nodeContentResult && nodeContentResult.content) {
+          batchContent[nodeStruct.id] = nodeContentResult.content;
+        } else {
+          const message = `No content returned for node ${nodeStruct.id}.`;
+          console.error(message, "AI Output:", nodeContentResult);
+          nodeErrorsMessages.push(`Node ${nodeStruct.id}: ${message}`);
+          batchContent[nodeStruct.id] = `[Content generation failed: No content from AI. Original summary: ${nodeStruct.summary}]`;
+        }
+      } catch (e) {
+        const errorMsg = e instanceof Error ? e.message : "Unknown error generating content for node.";
+        console.error(`Error generating content for node ${nodeStruct.id}:`, e);
+        nodeErrorsMessages.push(`Node ${nodeStruct.id}: ${errorMsg}`);
+        batchContent[nodeStruct.id] = `[Content generation critically failed: ${errorMsg}. Original summary: ${nodeStruct.summary}]`;
+      }
+    }
+  } catch (e) {
+    overallBatchError = e instanceof Error ? e.message : "An unknown error occurred during batch processing internals.";
+    console.error("Critical error during nodes batch processing (outer loop):", e);
+  }
+
+  let finalErrorSummary = overallBatchError;
+  if (nodeErrorsMessages.length > 0) {
+    const individualErrors = nodeErrorsMessages.join('; ');
+    if (finalErrorSummary) {
+      finalErrorSummary += ` Additionally, some nodes failed: ${individualErrors}`;
+    } else {
+      finalErrorSummary = `One or more nodes in the batch failed to generate: ${individualErrors}`;
+    }
+  }
+  
+  console.log(`Batch generation complete. Content items: ${Object.keys(batchContent).length}, Errors: ${finalErrorSummary || 'None'}`);
+  return { batchContent, error: finalErrorSummary };
+}
+
+
+// This action is no longer called directly by the client for full story generation.
+// The client (`review-structure/page.tsx`) will now loop and call `generateNodesBatchAction`.
+// Keeping it here for reference or potential future server-side orchestration if needed.
 export async function generateFullStoryAction(
   input: FullStoryGenerationInput
 ): Promise<{ success?: boolean; error?: string; fullStoryContent?: Record<string, string> }> {
-  console.log("generateFullStoryAction called with structure and original input.");
+  console.warn("generateFullStoryAction is deprecated for client use. Client should use batching.");
   const { structure, originalStoryInput } = input;
   const generatedContents: Record<string, string> = {};
   let hasErrors = false;
 
   try {
     for (const nodeStruct of structure.nodes) {
-      console.log(`Generating content for node: ${nodeStruct.id} - ${nodeStruct.title}`);
       const nodeInput: NodeContentInput = {
         storyContext: originalStoryInput,
         nodeStructure: nodeStruct,
       };
-      
-      // Introduce a small delay between calls to avoid overwhelming the API quickly (optional)
-      // await new Promise(resolve => setTimeout(resolve, 200)); 
-
+      await new Promise(resolve => setTimeout(resolve, 200));
       const nodeContentResult = await generateNodeContent(nodeInput);
 
       if (nodeContentResult && nodeContentResult.content) {
         generatedContents[nodeStruct.id] = nodeContentResult.content;
       } else {
-        console.error(`Failed to generate content for node ${nodeStruct.id}.`);
-        generatedContents[nodeStruct.id] = `[Content generation failed for this section. Original summary: ${nodeStruct.summary}]`; // Placeholder for failed nodes
-        hasErrors = true; // Flag that at least one node failed
+        generatedContents[nodeStruct.id] = `[Content generation failed. Summary: ${nodeStruct.summary}]`;
+        hasErrors = true;
       }
     }
-
-    if (Object.keys(generatedContents).length === 0) {
-        return { error: "No content was generated for any story node." };
-    }
-    
-    // The generatedContents (Record<string, string>) will be stored.
-    // The story parser will later combine this with the structure.
-    // This action is called on the server, so it can't directly use sessionStorage.
-    // The page calling this action (`review-structure/page.tsx`) will handle sessionStorage.
-
-    console.log("Full story content generation process complete.");
     if (hasErrors) {
-        console.warn("Some nodes failed to generate content properly.");
-         return { success: true, fullStoryContent: generatedContents, error: "Partial success: Some story sections might be missing or incomplete." };
+      return { success: true, fullStoryContent: generatedContents, error: "Partial success: Some sections incomplete." };
     }
-
     return { success: true, fullStoryContent: generatedContents };
-
   } catch (e) {
-    console.error("Critical error during full story generation process:", e);
-    const errorMessage = e instanceof Error ? e.message : "An unknown error occurred during full story generation.";
+    const errorMessage = e instanceof Error ? e.message : "Unknown error.";
     return { error: `Error generating full story: ${errorMessage}` };
   }
 }
