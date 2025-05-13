@@ -46,7 +46,18 @@ const storyPrompt = ai.definePrompt({
   name: 'storyPrompt',
   input: {schema: StoryInputSchema},
   output: {schema: StoryOutputSchema},
-  prompt: `You are an AI expert in creating "Choose Your Own Adventure" style interactive stories. Using the provided inputs, generate a detailed branching narrative structure and content.
+  prompt: `You are an AI expert in creating "Choose Your Own Adventure" style interactive stories. Your primary goal is to generate a complete, well-structured story in plain text format based on the user's inputs.
+
+**CRITICAL FORMATTING REQUIREMENTS:**
+The entire output MUST be a single string.
+This string will contain multiple story segments.
+EVERY segment MUST begin with the exact phrase "Node ID:" followed by its unique identifier, then a newline. For example:
+"Node ID: start_page"
+"Node ID: forest_path_A"
+Do NOT include any introductory text, preamble, or explanation before the first "Node ID:" line. The very first line of your output MUST be "Node ID: ...".
+Each segment MUST have a "Brief Title:" on a new line immediately after its "Node ID:" line.
+If a segment has decisions, they MUST be clearly formatted as specified below.
+If a segment is an ending, it MUST be clearly marked as specified below.
 
 Input Section:
 Story Title: {{{storyTitle}}}
@@ -56,7 +67,7 @@ Target Audience: {{{targetAudience}}}
 Protagonist:
 Name: {{{protagonistName}}}
 Description: {{{protagonistDescription}}}
-Key Motivation: {{{keyMotivation}}}
+Key Motivation: {{{{{{keyMotivation}}}}}
 
 Setting:
 Primary Location(s): {{{primaryLocation}}}
@@ -79,28 +90,45 @@ Desired Number of Distinct Endings: {{{desiredEndings}}}
 Writing Style: {{{writingStyle}}}
 
 AI Instruction:
-Generate a detailed branching narrative structure for a 'Choose Your Own Adventure' story. Represent this structure as a hierarchical outline.
-Each node in the structure represents a distinct segment or 'page' of the story. For each node, provide:
-Node ID: A unique identifier (e.g., page_1, forest_path_A, city_square_decision).
-Brief Title: A short descriptive title for the segment (e.g., The Journey Begins, Fork in the Path, Encounter in the Alley).
-Segment Summary: A 1-3 sentence summary of the key events or description of the scene for this segment.
-Decision(s) and Outcomes: If this segment requires a reader decision, clearly list the options available to the reader. For each option, specify the Node ID of the next segment the reader will go to if they choose that option. If a segment is an ending, state 'Ending' and briefly describe the outcome.
+Based on the inputs above, generate a detailed branching narrative.
 
-Ensure the structure includes:
-A clear starting node (e.g., start_page).
-Multiple decision points that lead to different paths.
-At least the specified number of distinct endings.
-Paths that vary in length and potential outcomes.
-Logical connections between segments based on decisions.
+For EACH segment of the story:
+1.  **Node ID**: Start with "Node ID: [unique_node_id]" on its own line. This is MANDATORY for every segment. Example: \`Node ID: forest_encounter_1\`
+2.  **Brief Title**: On the NEXT line, provide "Brief Title: [Segment Title]". This is MANDATORY for every segment. Example: \`Brief Title: A Shadow in the Trees\`
+3.  **Segment Content**: On the lines following the title, write the narrative for this segment (one or more paragraphs). Describe the scene, actions, dialogue, and atmosphere.
+4.  **Decisions (if applicable)**: If the segment leads to choices:
+    *   After the segment content, clearly present the decision options to the reader.
+    *   Each option MUST be formatted on its own line like: "- [Decision Text] Go to page [Next_Node_ID]" or "1. [Decision Text] Go to page [Next_Node_ID]".
+    *   Example of decision section:
+        - You decide to investigate the strange noise. Go to page forest_investigate
+        - You choose to ignore it and continue on the path. Go to page forest_path_continue
+5.  **Ending (if applicable)**: If this segment is an ending:
+    *   After the narrative content, write "Ending:" on its own line.
+    *   Then, on subsequent lines, provide a concluding paragraph describing the final outcome.
 
-Using the narrative structure and the initial story inputs, write the full narrative content for each segment (Node ID) in the structure.
-For each Node ID from the structure:
-Write the story segment's narrative content. This should be a paragraph or more, describing the scene, actions, dialogue, and atmosphere based on the Segment Summary.
-At the end of the segment, clearly present the decision options to the reader, exactly as outlined in the structure. Phrase the options naturally within the narrative or clearly list them (e.g., 'Do you choose to [Option A]? Go to page [Node ID]. Or do you [Option B]? Go to page [Node ID].'). Use the Node IDs as the 'page numbers' the reader goes to.
-Ensure the writing style matches the user's request.
-Maintain consistency with the protagonist, supporting characters, setting, and items defined in the initial inputs.
-If a segment is an 'Ending' node, write a concluding paragraph describing the final outcome.
-Present the output with each segment clearly labeled by its Node ID.
+Overall Story Structure Requirements:
+*   The story MUST start with a node (e.g., \`Node ID: start_page\`). This will be the first segment in your output.
+*   Include multiple decision points that lead to different paths.
+*   Ensure the story includes at least the specified number of distinct endings.
+*   Maintain logical connections between segments based on decisions.
+*   The writing style should match the user's request.
+*   Maintain consistency with characters, setting, and items.
+
+**Example of a Single Story Segment Output:**
+Node ID: cave_entrance
+Brief Title: The Dark Cave Mouth
+You stand before a gaping cave entrance. A chilling wind howls from within, carrying faint whispers. The air is heavy with the scent of damp earth and something else... something ancient and unsettling. Your torch flickers, casting dancing shadows on the jagged rock face.
+- Enter the cave. Go to page cave_explore_depths
+- Turn back and seek another path. Go to page forest_retreat
+
+**Example of an Ending Segment Output:**
+Node ID: treasure_found_ending
+Brief Title: Victory and Riches!
+After navigating the treacherous traps, you finally reach the heart of the ancient temple. Before you lies a vast chamber filled with glittering gold, jewels, and ancient artifacts. You've found the legendary treasure! Your name will be sung by bards for generations to come.
+Ending:
+You return to your village a hero, your bravery and wit having secured a prosperous future for your people. The quest was perilous, but the rewards were beyond imagination.
+
+Remember: Adherence to the "Node ID:", "Brief Title:", decision, and ending formats is CRITICAL for the story to be usable. The entire output must be one continuous block of text consisting of these structured segments.
 `,
 });
 
