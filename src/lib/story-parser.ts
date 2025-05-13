@@ -30,7 +30,7 @@ export function parseStory(fullStoryText: string): { storyMap: ParsedStory; star
   if (normalizedText.startsWith("Node ID:")) {
     normalizedText = `\n${normalizedText}`;
   }
-  
+
   const segments = normalizedText.split(/\nNode ID:\s*/).filter(segment => segment.trim() !== "");
 
   if (segments.length === 0) {
@@ -46,7 +46,8 @@ export function parseStory(fullStoryText: string): { storyMap: ParsedStory; star
         continue;
     }
     // Check if idLine itself contains other markers like "Brief Title:", which would mean it's not a clean ID.
-    if (idLine.includes(":") && !idLine.trim().match(/^[a-zA-Z0-9_]+$/)) {
+    // A simple regex to check if it looks like a valid ID (alphanumeric + underscore)
+    if (!/^[a-zA-Z0-9_]+$/.test(idLine.trim())) {
         console.warn(`Skipping segment, ID line seems malformed: "${idLine}"`);
         continue;
     }
@@ -60,7 +61,7 @@ export function parseStory(fullStoryText: string): { storyMap: ParsedStory; star
     const decisions: StoryDecision[] = [];
     let isEnding = false;
     let endingText = "";
-    
+
     let title: string | undefined;
     // Try to find "Brief Title:" specifically in the current segment's lines
     let titleLineIndex = -1;
@@ -71,54 +72,73 @@ export function parseStory(fullStoryText: string): { storyMap: ParsedStory; star
             break;
         }
     }
+    // If no explicit title, generate one from the ID
     if (!title) {
       title = id.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
     }
 
     // Content is lines after ID (and optionally title), until decisions or ending.
-    // Filter out known headers from the lines used for raw content.
+    // Filter out known headers/markers from the lines used for raw content.
     const contentLines = lines.filter((line, index) => {
         if (index === titleLineIndex) return false; // Don't include the title line if explicitly parsed
         const trimmedLine = line.trim();
-        return !trimmedLine.startsWith("Segment Summary:") && !trimmedLine.startsWith("Content:");
+        return !trimmedLine.startsWith("Segment Summary:")
+            && !trimmedLine.startsWith("Content:")
+            && !trimmedLine.startsWith("Node ID:") // Filter out any misplaced Node ID lines
+            && !trimmedLine.startsWith("Brief Title:"); // Filter out any misplaced Title lines
     });
 
 
     let contentEndIndex = contentLines.length;
     for(let i = 0; i < contentLines.length; i++) {
         const line = contentLines[i].trim();
-        if (line.match(/^\d+\.\s*.+Go to page\s+\w+/i) || line.match(/^-\s*.+Go to page\s+\w+/i) || line.startsWith("What do you do?") || line.startsWith("Do you?") || line.startsWith("Decision(s):") || line.startsWith("Decisions:")) {
+        // Decision markers
+        if (line.match(/^(?:\d+\.|-)\s*.+?(?:\.|)\s*(?:Go to page|Go to)\s+[a-zA-Z0-9_]+(?:\.|)$/i) || line.match(/^What do you do\??/i) || line.match(/^Do you\??/i) || line.match(/^Decision\(?s?\)?:\s*$/i)) {
             contentEndIndex = i;
             break;
         }
-        if (line.startsWith("Ending:")) {
+        // Ending marker
+        if (line.match(/^Ending:\s*$/i)) {
             contentEndIndex = i;
             isEnding = true;
             break;
         }
     }
-    
+
     rawContent = contentLines.slice(0, contentEndIndex).join('\n').trim();
 
     if (isEnding) {
-        endingText = contentLines.slice(contentEndIndex + 1).join('\n').trim();
-        if (endingText.startsWith("Ending:")) { // remove the "Ending:" label itself
-            endingText = endingText.substring("Ending:".length).trim();
+        // Ending text starts after the "Ending:" line
+        let endingStartIndex = contentEndIndex + 1;
+        // Adjust if the "Ending:" line itself wasn't filtered out (it shouldn't be based on filter logic, but check anyway)
+        if(contentLines[contentEndIndex]?.trim().match(/^Ending:\s*$/i)) {
+             endingStartIndex = contentEndIndex + 1;
+        } else {
+             // If Ending: marker wasn't found but isEnding is true (e.g. set later), assume ending text starts after content
+             endingStartIndex = contentEndIndex;
+        }
+        endingText = contentLines.slice(endingStartIndex).join('\n').trim();
+        // Ensure the "Ending:" label isn't included in the text itself
+        if (endingText.toLowerCase().startsWith("ending:")) {
+            endingText = endingText.substring("ending:".length).trim();
         }
     } else {
+        // Parse decisions from the lines after the content
         for (let i = contentEndIndex; i < contentLines.length; i++) {
             const line = contentLines[i].trim();
+            // Regex captures: Group 1 = Text, Group 2 = nextNodeId
             const decisionMatch = line.match(/^(?:\d+\.|-)\s*(.+?)\.?\s*(?:Go to page|Go to)\s+([a-zA-Z0-9_]+)\.?$/i);
-            if (decisionMatch) {
+            if (decisionMatch && decisionMatch[1] && decisionMatch[2]) { // Check if capture groups exist
                 decisions.push({
-                    text: decisionMatch[2].trim(), // decisionMatch[1] is text, decisionMatch[2] is nextNodeId
-                    nextNodeId: decisionMatch[3].trim(), // Corrected indices based on typical regex group capture
+                    text: decisionMatch[1].trim(), // Group 1: Decision Text
+                    nextNodeId: decisionMatch[2].trim(), // Group 2: Next Node ID
                 });
             }
         }
          // If no decisions explicitly parsed and not an "Ending:" block, check if content implies ending
         if (decisions.length === 0 && !isEnding) {
             const lowerRawContent = rawContent.toLowerCase();
+            // Simple check for common ending phrases if no decisions/Ending: tag found
             if (lowerRawContent.includes("the end") || lowerRawContent.includes("your adventure ends") || lowerRawContent.includes("ending.")) {
                  isEnding = true;
             } else if (contentEndIndex === contentLines.length) { // No decision markers found AND no "Ending:" tag
@@ -127,15 +147,32 @@ export function parseStory(fullStoryText: string): { storyMap: ParsedStory; star
             }
         }
     }
-    
+
+    // If it's an ending, ensure endingText is set (use rawContent if endingText is empty)
+    const finalEndingText = isEnding ? (endingText || rawContent) : undefined;
+
     storyMap.set(id, {
       id,
       title,
       rawContent,
       decisions,
       isEnding,
-      endingText: isEnding ? (endingText || rawContent) : undefined,
+      endingText: finalEndingText,
     });
+  }
+
+  // Validate start node exists
+  if (startNodeId && !storyMap.has(startNodeId)) {
+      console.warn(`Parsed startNodeId "${startNodeId}" does not exist in the final storyMap. Attempting to find the first node.`);
+      // Fallback: Use the first key in the map if available
+      const firstKey = storyMap.keys().next().value;
+      if (firstKey) {
+          startNodeId = firstKey;
+          console.log(`Using first node found as start node: "${startNodeId}"`);
+      } else {
+          console.error("Story map is empty after parsing. Cannot determine start node.");
+          startNodeId = null; // Ensure it's null if map is empty
+      }
   }
 
   return { storyMap, startNodeId };
