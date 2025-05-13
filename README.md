@@ -1,5 +1,8 @@
 # Tie-Dyed Tales
 
+![Screenshot 2025-05-13 at 12 34 16 AM](https://github.com/user-attachments/assets/bfc96a85-4752-4fcd-b323-7c6705f93e97)
+
+
 Tie-Dyed Tales is a Next.js web application that empowers users to create their own "Choose Your Own Adventure" style stories with the help of AI. Leveraging Google's Genkit, users can define story parameters, generate a branching narrative structure, and then produce the full story content for an interactive reading experience.
 
 ## Core Features
